@@ -1,49 +1,56 @@
 
-type datatype =
+(* http://swagger.io/specification/#dataTypeFormat *)
+type data_type = Integer | Number | String | Boolean
+type data_format =
   | Integer32 | Integer64 | Float | Double
-  | String | Byte | Password
+  | Byte | Password
   | Date | Datetime
-  | Boolean
 
 (* TODO: support more later *)
 type default_value =
   | Int of int
   | Str of string
 
+type transfer_protocol = HTTP | HTTPS | WS | WSS
+
 (* TODO: provided more type options for enum values *)
 (* http://json-schema.org/latest/json-schema-validation.html#anchor76 *)
 type enum = string
 
-type web_resource = {
-  description : string;
-  url : string;
-}
-
+(* http://swagger.io/specification/#mimeTypes *)
+(* TODO: support additional mime types *)
+type mime_types =
+  | JSON (* 'application/json *)
+  | Text (* 'text/plain; charset=utf-8' *)
 
 (* http://swagger.io/specification/#contactObject *)
 type contact = {
-  name: string;
-  url: string;
-  email: string;
+  name: string option;
+  url: string option;
+  email: string option;
 }
 
 (* http://swagger.io/specification/#licenseObject *)
-type license = web_resource
+type license = {
+  name : string;
+  url : string option;
+}
 
 (* http://swagger.io/specification/#infoObject *)
 type info = {
   title : string;
-  description: string;
-  terms_of_service : string;
-  contact : contact;
-  license : license;
+  description: string option;
+  terms_of_service : string option;
+  contact : contact option;
+  license : license option;
   version : string;
 }
 
 (* http://swagger.io/specification/#externalDocumentationObject *)
-type external_doc = web_resource
-
-type parameter_format = Query | Header | Path | FormData | Body
+type external_doc = {
+  description : string option;
+  url : string;
+}
 
 type item_datatype = String | Number | Integer | Boolean | Array
 
@@ -55,16 +62,17 @@ Determines the format of the array if type array is used. Possible values are:
   pipes - pipe separated values foo|bar.
   Default value is csv.
 *)
-type collection_format = | CSV | SSV | TSV | Pipes
+type collection_format = CSV | SSV | TSV | Pipes
 
+(* http://swagger.io/specification/#itemsObject *)
 type item = {
   datatype : item_datatype; (* 'type' *)
   items : item option; (* IFF datatype == Array *)
-  collection_format : collection_format;
-  default: default_value;
-  enum_values : enum list; (* MUST be unique *)
+  collection_format : collection_format option;
+  default: default_value option;
+  enum_values : enum list option; (* MUST be unique *)
+  format' : data_format option;
   (* non-MVP options
-    format': string;
     maximum : int option;
     exclusive_maximum : int option;
     minimum : int option;
@@ -83,19 +91,21 @@ type item = {
 type data_schema = {
   (* JSON schema spec: http://json-schema.org/latest/json-schema-validation.html *)
   ref : data_schema option;
-  format : datatype;
-  title : string;
-  description : string;
-  default_value : default_value;
-  required_attributes : string list;
-  enum_values : enum list; (* MUST be unique *)
+  format : data_format option;
   type_options : string list;
+  title : string option;
+  description : string option;
+  default_value : default_value option;
+  required_attributes : string list;
+  enum_values : enum list option;
   (* swagger modified spec (definitions altered from JSON schema) *)
-  items: item;
-  discriminator : string;
-  read_only : bool;
-  external_docs : external_doc;
-  example : string;
+  items: item option;
+  properties : item list;
+  (* swagger specific fixed fields *)
+  discriminator : string option;
+  read_only : bool option;
+  external_docs : external_doc option;
+  example : string option;
   (* TODO: non-MVP options
     multiple_of : int option; (* http://json-schema.org/latest/json-schema-validation.html#anchor14 *)
     maximum : int option;
@@ -115,50 +125,196 @@ type data_schema = {
   *)
 }
 
+type parameter_format = Query | Header | Path | FormData | Body
+
+type parameter_type = String | Number | Integer | Boolean | Array | File
+
+type parameter_collection_format = (* default is CSV *)
+  | CSV (* comma separated values *)
+  | SSV (* space separated values *)
+  | TSV (* tab separated values *)
+  | Pipes (* pipe separated values *)
+  | Multi (* multiple parametern instances, must be Query||FormData *)
+
 (* http://swagger.io/specification/#parameterObject *)
 type parameter = {
   name : string;
   in' : parameter_format;
-  description : string;
-  required : bool;
+  description : string option;
+  required : bool option; (* required if in' == Path *)
+  (* if in' == "body" *)
   schema : data_schema;
+  (* else *)
+  type' : parameter_type;
+  format' : data_format option;
+  allow_empty_value : bool option;
+  items : item option; (* required if type' == Array *)
+  collection_format : parameter_collection_format option;
+  default : default_value;
+  enum_values : enum list option; (* MUST be unique *)
+  (* non-MVP options
+    format': string;
+    maximum : int option;
+    exclusive_maximum : int option;
+    minimum : int option;
+    exclusive_minimum : int option;
+    max_length : int option;
+    min_length : int option;
+    pattern : string option;
+    max_items : int option;
+    min_items : int option;
+    unique_items : bool;
+    multiple_of : int;
+  *)
 }
 
-type parameters = parameter
+(* http://swagger.io/specification/#headerObject *)
+type header = {
+  description : string option;
+  type' : item_datatype;
+  format : data_format option;
+  items : item option option; (* IFF datatype == Array *)
+  collection_format : collection_format option;
+  default : default_value option;
+  (* non-MVP options
+    format': string;
+    maximum : int option;
+    exclusive_maximum : int option;
+    minimum : int option;
+    exclusive_minimum : int option;
+    max_length : int option;
+    min_length : int option;
+    pattern : string option;
+    max_items : int option;
+    min_items : int option;
+    unique_items : bool;
+    multiple_of : int;
+  *)
+}
+
+(* http://swagger.io/specification/#headersObject *)
+type headers = (string * header) list
+
+(* http://swagger.io/specification/#exampleObject *)
+(* mime-type -> value *)
+type example = (string * default_value) list
+
+(* http://swagger.io/specification/#responseObject *)
+type response = {
+  description : string;
+  schema : data_schema option;
+  headers : headers option;
+  examples : example option;
+}
+
+type reference = {
+  ref : string;
+}
+
+(* response object or reference *)
+type default_object =
+  | Resp of response
+  | Ref of reference
+
+(* http://swagger.io/specification/#responsesObject *)
+type responses = {
+  default_obj : default_object option;
+  default_ref : string option;
+}
+
+type parameters =
+  | Parameter of parameter
+  | Reference of reference
+
+(* http://swagger.io/specification/#securityRequirementObject *)
+(* security name scheme --> array of scopes if oauth2 otherwise empty array  *)
+type security_requirements = (string * string list) list
 
 (* http://swagger.io/specification/#operationObject *)
 type operation = {
-  tags : string list;
-  summary : string;
-  description : string;
-  external_docs : web_resource;
-  operation_id : string;
-  consumes : string list;
-  produces : string list;
-  parameters :  parameters;
+  tags : string list option;
+  summary : string option;
+  description : string option;
+  external_docs : external_doc option;
+  operation_id : string option;
+  consumes : mime_types list option;
+  produces : mime_types list option;
+  parameters : parameters list;
+  responses : responses;
+  schemes : transfer_protocol list option;
+  deprecated : bool option;
+  (* non-MVP options
+    security : security_requirements list option;
+  *)
 }
 
 (* http://swagger.io/specification/#pathItemObject *)
 type path = {
-  ref : string;
-  get : string option;
+  ref : string option;
+  get : operation option;
+  put : operation option;
+  post : operation option;
+  delete : operation option;
+  options : operation option;
+  head : operation option;
+  patch : operation option;
+  parameters : parameters option;
 }
 
+(* http://swagger.io/specification/#securitySchemeObject *)
+(* non-MVP options
+type security_scheme_type = Basic | ApiKey | Oauth2
+type security_api_key_location = Query | Header
+type security_flow = Implicit | Password | Application | AccessCode
+
+type security_scheme = {
+  type' : security_scheme_type;
+  description : string option;
+  name : string;
+  in' : security_api_key_location;
+}
+*)
+
 (* http://swagger.io/specification/#pathsObject *)
-type paths = {
-  pattern : string * path;
+(* relative path to endpoint -> path *)
+type paths = (string * path) list
+
+(* http://swagger.io/specification/#definitionsObject *)
+type definitions = (string * data_schema) list
+
+(* http://swagger.io/specification/#parametersDefinitionsObject *)
+type parameter_definitions = (string * parameter) list
+
+(* http://swagger.io/specification/#responsesDefinitionsObject *)
+type response_definitions = (string * response) list
+
+(* non-MVP options
+(* http://swagger.io/specification/#securityDefinitionsObject *)
+*)
+
+(* http://swagger.io/specification/#tagObject *)
+type tag = {
+  name : string;
+  description : string option;
+  external_docs : external_doc;
 }
 
 (* http://swagger.io/specification/#swaggerObject *)
 type schema = {
   swagger : string;
   info : info;
-  host : string;
-  base_path : string;
-  schemes : string list;
-  consumes : string list;
-  produces : string list;
   paths : paths;
+  host : string option;
+  base_path : string option;
+  schemes : string list option;
+  consumes : string list option;
+  produces : string list option;
+  definitions : definitions option;
+  responses : response_definitions option;
+  tags : tag list option;
+  external_docs : external_doc option;
+  (* non-MVP options
+    security_definitions :
+    security
+  *)
 }
-
-
