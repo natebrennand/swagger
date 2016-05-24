@@ -4,6 +4,7 @@ let sprintf = Format.sprintf
 
 let member_string_option key json = Util.member key json |> Util.to_string_option
 let member_string key json = Util.member key json |> Util.to_string
+let member_map key fn json = Util.member key json |> fn
 let member_opt_map key fn json = Util.member key json |> Util.to_option fn
 
 exception InvalidDataType of string
@@ -11,6 +12,8 @@ exception InvalidDataFormat of string
 exception UnsupportedDefaultValueType of string
 exception UnsupportedTransferProtocol of string
 exception UnsupportedMimeType of string
+exception UnsupportedCollectionFormat of string
+exception UnsupportedEnumValues of string
 
 
 let data_type_from_json json = match to_string json with
@@ -22,42 +25,33 @@ let data_type_from_json json = match to_string json with
   | "array" -> Schema.Array
   | x -> raise(InvalidDataType(x))
 
-let data_format_from_json json =
-  let value = to_string json in
-  if value = "" then None else Some(
-    match value with
-    | "integer32" -> Schema.Integer32
-    | "integer64" -> Schema.Integer64
-    | "float" -> Schema.Float
-    | "double" -> Schema.Double
-    | "byte" -> Schema.Byte
-    | "password" -> Schema.Password
-    | "date" -> Schema.Date
-    | "datetime" -> Schema.Datetime
-    | x -> raise(InvalidDataType x))
+let data_format_from_json json = match to_string json with
+  | "integer32" -> Schema.Integer32
+  | "integer64" -> Schema.Integer64
+  | "float" -> Schema.Float
+  | "double" -> Schema.Double
+  | "byte" -> Schema.Byte
+  | "password" -> Schema.Password
+  | "date" -> Schema.Date
+  | "datetime" -> Schema.Datetime
+  | x -> raise(InvalidDataType x)
 
 let default_value_from_json = function
   | `String s -> Schema.Str s
   | `Int i -> Schema.Int i
   | x -> raise(InvalidDataType(pretty_to_string x))
 
-let transfer_protocol_from_json json =
-  let value = to_string json in
-  if value = "" then None else Some(
-    match value with
-      | "http" -> Schema.HTTP
-      | "https" -> Schema.HTTPS
-      | "ws" -> Schema.WS
-      | "wss" -> Schema.WSS
-      | x -> raise(UnsupportedTransferProtocol x))
+let transfer_protocol_from_json json = match to_string json with
+  | "http" -> Schema.HTTP
+  | "https" -> Schema.HTTPS
+  | "ws" -> Schema.WS
+  | "wss" -> Schema.WSS
+  | x -> raise(UnsupportedTransferProtocol x)
 
-let mime_type_from_json json =
-  let value = to_string json in
-  if value = "" then None else Some(
-    match value with
-      | "text/plain; charset=utf-8" -> Schema.Text
-      | "application/json" -> Schema.JSON
-      | x -> raise(UnsupportedMimeType x))
+let mime_type_from_json json = match to_string json with
+  | "text/plain; charset=utf-8" -> Schema.Text
+  | "application/json" -> Schema.JSON
+  | x -> raise(UnsupportedMimeType x)
 
 let contact_from_json json : Schema.contact =
   {
@@ -89,11 +83,39 @@ let external_doc_from_json json : Schema.external_doc =
   }
 
 
+let collection_format_from_json json =
+  match Util.to_string_option json with
+    | Some("ssv") -> Schema.SSV
+    | Some("tsv") -> Schema.TSV
+    | Some("pipes") -> Schema.Pipes
+    | Some("csv") | None -> Schema.CSV (* default *)
+    | Some(x) -> raise(UnsupportedCollectionFormat x)
+
+let rec item_from_json json : Schema.item =
+  let enum_values = match Util.member "enum" json with
+    | `List l -> Some(List.map to_string l)
+    | `Null -> None
+    | _ -> raise(UnsupportedEnumValues "enums must be an array")
+  in {
+    enum_values;
+    datatype = member_map "type" data_type_from_json json;
+    items = member_opt_map "items" item_from_json json;
+    collection_format = member_opt_map "collectionFormat" collection_format_from_json json;
+    default = member_opt_map "default" default_value_from_json json;
+    data_format = member_opt_map "format" data_format_from_json json;
+  }
+
+
 let main () =
   let json = from_channel stdin in
+  Util.member "collection" json |> collection_format_from_json |> (function
+    | Schema.CSV -> print_endline "hi"
+  )
+  (*
   Util.member "format" json |> data_type_from_json |> (function
     | Schema.Integer -> print_endline "hi"
   )
+  *)
 
 
 let () = main ()

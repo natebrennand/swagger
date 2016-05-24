@@ -1,6 +1,7 @@
 
 (* http://swagger.io/specification/#dataTypeFormat *)
 type data_type = Integer | Number | String | Boolean
+  | Array | File (* these are added to work with other datatypes *)
 type data_format =
   | Integer32 | Integer64 | Float | Double
   | Byte | Password
@@ -11,7 +12,26 @@ type default_value =
   | Int of int
   | Str of string
 
+type parameter_format = Query | Header | Path | FormData | Body
+
+type parameter_collection_format = (* default is CSV *)
+  | CSV (* comma separated values *)
+  | SSV (* space separated values *)
+  | TSV (* tab separated values *)
+  | Pipes (* pipe separated values *)
+  | Multi (* multiple parametern instances, must be Query||FormData *)
+
 type transfer_protocol = HTTP | HTTPS | WS | WSS
+
+(*
+Determines the format of the array if type array is used. Possible values are:
+  csv - comma separated values foo,bar.
+  ssv - space separated values foo bar.
+  tsv - tab separated values foo\tbar.
+  pipes - pipe separated values foo|bar.
+  Default value is csv.
+*)
+type collection_format = CSV | SSV | TSV | Pipes
 
 (* TODO: provided more type options for enum values *)
 (* http://json-schema.org/latest/json-schema-validation.html#anchor76 *)
@@ -52,26 +72,15 @@ type external_doc = {
   url : string;
 }
 
-type item_datatype = String | Number | Integer | Boolean | Array
-
-(*
-Determines the format of the array if type array is used. Possible values are:
-  csv - comma separated values foo,bar.
-  ssv - space separated values foo bar.
-  tsv - tab separated values foo\tbar.
-  pipes - pipe separated values foo|bar.
-  Default value is csv.
-*)
-type collection_format = CSV | SSV | TSV | Pipes
 
 (* http://swagger.io/specification/#itemsObject *)
 type item = {
-  datatype : item_datatype; (* 'type' *)
+  datatype : data_type; (* 'type' *)
   items : item option; (* IFF datatype == Array *)
   collection_format : collection_format option;
   default: default_value option;
-  enum_values : enum list option; (* MUST be unique *)
-  format' : data_format option;
+  enum_values : (enum list) option; (* MUST be unique *)
+  data_format : data_format option;
   (* non-MVP options
     maximum : int option;
     exclusive_maximum : int option;
@@ -125,17 +134,6 @@ type data_schema = {
   *)
 }
 
-type parameter_format = Query | Header | Path | FormData | Body
-
-type parameter_type = String | Number | Integer | Boolean | Array | File
-
-type parameter_collection_format = (* default is CSV *)
-  | CSV (* comma separated values *)
-  | SSV (* space separated values *)
-  | TSV (* tab separated values *)
-  | Pipes (* pipe separated values *)
-  | Multi (* multiple parametern instances, must be Query||FormData *)
-
 (* http://swagger.io/specification/#parameterObject *)
 type parameter = {
   name : string;
@@ -145,7 +143,7 @@ type parameter = {
   (* if in' == "body" *)
   schema : data_schema;
   (* else *)
-  type' : parameter_type;
+  type' : data_type;
   format' : data_format option;
   allow_empty_value : bool option;
   items : item option; (* required if type' == Array *)
@@ -171,7 +169,7 @@ type parameter = {
 (* http://swagger.io/specification/#headerObject *)
 type header = {
   description : string option;
-  type' : item_datatype;
+  type' : data_type;
   format : data_format option;
   items : item option option; (* IFF datatype == Array *)
   collection_format : collection_format option;
