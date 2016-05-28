@@ -2,6 +2,7 @@
 (* http://swagger.io/specification/#dataTypeFormat *)
 type data_type = Integer | Number | String | Boolean
   | Array | File (* these are added to work with other datatypes *)
+  | Object
 type data_format =
   | Integer32 | Integer64 | Float | Double
   | Byte | Password
@@ -99,9 +100,9 @@ type item = {
 (* http://swagger.io/specification/#schemaObject *)
 type data_schema = {
   (* JSON schema spec: http://json-schema.org/latest/json-schema-validation.html *)
-  ref : data_schema option;
+  ref : string option;
   format : data_format option;
-  type_options : string list;
+  type_options : data_type; (* TODO: type can have multiiple options, for now we only allow 1 *)
   title : string option;
   description : string option;
   default_value : default_value option;
@@ -109,13 +110,13 @@ type data_schema = {
   enum_values : enum list option;
   (* swagger modified spec (definitions altered from JSON schema) *)
   items: item option;
-  properties : item list;
+  properties : (string * item) list;
   (* swagger specific fixed fields *)
-  discriminator : string option;
-  read_only : bool option;
   external_docs : external_doc option;
   example : string option;
   (* TODO: non-MVP options
+    discriminator : string option;
+    read_only : bool option;
     multiple_of : int option; (* http://json-schema.org/latest/json-schema-validation.html#anchor14 *)
     maximum : int option;
     exclusive_maximum : int option;

@@ -1,11 +1,25 @@
 open Yojson.Basic
+open Schema
 
-let sprintf = Format.sprintf
-
-let member_string_option key json = Util.member key json |> Util.to_string_option
-let member_string key json = Util.member key json |> Util.to_string
 let member_map key fn json = Util.member key json |> fn
 let member_opt_map key fn json = Util.member key json |> Util.to_option fn
+
+let member_string key json = member_map key Util.to_string json
+let member_opt_string key json = member_opt_map key Util.to_string json
+
+
+let member_list key fn json = Util.member key json |> Util.to_list |> List.map fn
+let member_string_list key json = member_list key Util.to_string json
+
+let member_opt_list key fn json = Util.member key json |>
+  Util.to_option (fun x -> x |> Util.to_list |> List.map fn)
+let member_opt_string_list key json = member_opt_list key Util.to_string json
+
+let member_assoc key fn json = json |> Util.member key
+  |> Util.to_assoc |> List.map (fun (s, v) -> (s, fn v))
+let member_opt_assoc key fn json =
+  let foo j = j |> Util.to_assoc |> List.map (fun (s, v) -> (s, fn v)) in
+  json |> Util.member key |> Util.to_option foo
 
 exception InvalidDataType of string
 exception InvalidDataFormat of string
@@ -17,81 +31,82 @@ exception UnsupportedEnumValues of string
 
 
 let data_type_from_json json = match to_string json with
-  | "integer" -> Schema.Integer
-  | "number" -> Schema.Number
-  | "string" -> Schema.String
-  | "boolean" -> Schema.Boolean
-  | "file" -> Schema.File
-  | "array" -> Schema.Array
+  | "integer" -> Integer
+  | "number" -> Number
+  | "string" -> String
+  | "boolean" -> Boolean
+  | "file" -> File
+  | "array" -> Array
+  | "object" -> Object
   | x -> raise(InvalidDataType(x))
 
 let data_format_from_json json = match to_string json with
-  | "integer32" -> Schema.Integer32
-  | "integer64" -> Schema.Integer64
-  | "float" -> Schema.Float
-  | "double" -> Schema.Double
-  | "byte" -> Schema.Byte
-  | "password" -> Schema.Password
-  | "date" -> Schema.Date
-  | "datetime" -> Schema.Datetime
+  | "integer32" -> Integer32
+  | "integer64" -> Integer64
+  | "float" -> Float
+  | "double" -> Double
+  | "byte" -> Byte
+  | "password" -> Password
+  | "date" -> Date
+  | "datetime" -> Datetime
   | x -> raise(InvalidDataType x)
 
 let default_value_from_json = function
-  | `String s -> Schema.Str s
-  | `Int i -> Schema.Int i
+  | `String s -> Str s
+  | `Int i -> Int i
   | x -> raise(InvalidDataType(pretty_to_string x))
 
 let transfer_protocol_from_json json = match to_string json with
-  | "http" -> Schema.HTTP
-  | "https" -> Schema.HTTPS
-  | "ws" -> Schema.WS
-  | "wss" -> Schema.WSS
+  | "http"  -> HTTP
+  | "https" -> HTTPS
+  | "ws"    -> WS
+  | "wss"   -> WSS
   | x -> raise(UnsupportedTransferProtocol x)
 
 let mime_type_from_json json = match to_string json with
-  | "text/plain; charset=utf-8" -> Schema.Text
-  | "application/json" -> Schema.JSON
+  | "text/plain; charset=utf-8" -> Text
+  | "application/json" -> JSON
   | x -> raise(UnsupportedMimeType x)
 
-let contact_from_json json : Schema.contact =
+let contact_from_json json =
   {
-    name  = member_string_option "name" json;
-    url   = member_string_option "url" json;
-    email = member_string_option "email" json;
+    name  = member_opt_string "name" json;
+    url   = member_opt_string "url" json;
+    email = member_opt_string "email" json;
   }
 
-let license_from_json json : Schema.license =
+let license_from_json json =
   {
     name  = member_string "name" json;
-    url   = member_string_option "url" json;
+    url   = member_opt_string "url" json;
   }
 
-let info_from_json json : Schema.info =
+let info_from_json json =
   {
     title = member_string "title" json;
     version = member_string "version" json;
-    description = member_string_option "description"  json;
-    terms_of_service = member_string_option "termsOfService" json;
+    description = member_opt_string "description"  json;
+    terms_of_service = member_opt_string "termsOfService" json;
     contact = member_opt_map "contact" contact_from_json json;
     license = member_opt_map "license" license_from_json json;
   }
 
-let external_doc_from_json json : Schema.external_doc =
+let external_doc_from_json json =
   {
-    description = member_string_option "description" json;
+    description = member_opt_string "description" json;
     url = member_string "url" json;
   }
 
 
 let collection_format_from_json json =
   match Util.to_string_option json with
-    | Some("ssv") -> Schema.SSV
-    | Some("tsv") -> Schema.TSV
-    | Some("pipes") -> Schema.Pipes
-    | Some("csv") | None -> Schema.CSV (* default *)
+    | Some("ssv") -> SSV
+    | Some("tsv") -> TSV
+    | Some("pipes") -> Pipes
+    | Some("csv") | None -> CSV (* default *)
     | Some(x) -> raise(UnsupportedCollectionFormat x)
 
-let rec item_from_json json : Schema.item =
+let rec item_from_json json =
   let enum_values = match Util.member "enum" json with
     | `List l -> Some(List.map to_string l)
     | `Null -> None
@@ -105,15 +120,34 @@ let rec item_from_json json : Schema.item =
     data_format = member_opt_map "format" data_format_from_json json;
   }
 
+let rec data_schema_from_json json : data_schema =
+  {
+    ref =  member_opt_string "$ref" json;
+    format = member_opt_map "format" data_format_from_json json;
+    type_options = member_map "type" data_type_from_json json;
+    title =  member_opt_string "title" json;
+    description =  member_opt_string "description" json;
+    default_value = member_opt_map "default" default_value_from_json json;
+    required_attributes = member_string_list "required" json;
+    enum_values = member_opt_string_list "enum" json;
+    items = member_opt_map "items" item_from_json json;
+    properties = member_assoc "properties" item_from_json json;
+    external_docs = member_opt_map "externalDocs" external_doc_from_json json;
+    example = member_opt_string "example" json;
+  }
+
+
 
 let main () =
   let json = from_channel stdin in
-  Util.member "collection" json |> collection_format_from_json |> (function
-    | Schema.CSV -> print_endline "hi"
-  )
+  let data = Util.to_assoc json in
+  List.iter (fun (s, v) -> print_endline (Format.sprintf "%s -> %s" s (Util.to_string v))) data
   (*
+  Util.member "collection" json |> collection_format_from_json |> (function
+    | CSV -> print_endline "hi"
+  )
   Util.member "format" json |> data_type_from_json |> (function
-    | Schema.Integer -> print_endline "hi"
+    | Integer -> print_endline "hi"
   )
   *)
 
