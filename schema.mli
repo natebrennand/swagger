@@ -138,18 +138,18 @@ type data_schema = {
 (* http://swagger.io/specification/#parameterObject *)
 type parameter = {
   name : string;
-  in' : parameter_format;
+  location : parameter_format;  (* "in" *)
   description : string option;
   required : bool option; (* required if in' == Path *)
   (* if in' == "body" *)
-  schema : data_schema;
+  schema : data_schema option;
   (* else *)
-  type' : data_type;
-  format' : data_format option;
+  data_type : data_type option;
+  data_format : data_format option;
   allow_empty_value : bool option;
   items : item option; (* required if type' == Array *)
   collection_format : parameter_collection_format option;
-  default : default_value;
+  default : default_value option;
   enum_values : enum list option; (* MUST be unique *)
   (* non-MVP options
     format': string;
@@ -170,9 +170,9 @@ type parameter = {
 (* http://swagger.io/specification/#headerObject *)
 type header = {
   description : string option;
-  type' : data_type;
-  format : data_format option;
-  items : item option option; (* IFF datatype == Array *)
+  data_type : data_type;
+  data_format : data_format option;
+  items : item option; (* IFF datatype == Array *)
   collection_format : collection_format option;
   default : default_value option;
   (* non-MVP options

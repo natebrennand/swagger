@@ -23,6 +23,7 @@ let member_opt_assoc key fn json =
 
 exception InvalidDataType of string
 exception InvalidDataFormat of string
+exception InvalidParameterLocation of string
 exception UnsupportedDefaultValueType of string
 exception UnsupportedTransferProtocol of string
 exception UnsupportedMimeType of string
@@ -64,9 +65,17 @@ let transfer_protocol_from_json json = match to_string json with
   | x -> raise(UnsupportedTransferProtocol x)
 
 let mime_type_from_json json = match to_string json with
-  | "text/plain; charset=utf-8" -> Text
   | "application/json" -> JSON
+  | "text/plain; charset=utf-8" -> Text
   | x -> raise(UnsupportedMimeType x)
+
+let parameter_format_from_json json = match to_string json with
+  | "query" -> Query
+  | "heaader" -> Header
+  | "path" -> Path
+  | "formData" -> FormData
+  | "body" -> Body
+  | x -> raise(InvalidParameterLocation x)
 
 let contact_from_json json =
   {
@@ -97,22 +106,33 @@ let external_doc_from_json json =
     url = member_string "url" json;
   }
 
-
 let collection_format_from_json json =
-  match Util.to_string_option json with
-    | Some("ssv") -> SSV
-    | Some("tsv") -> TSV
-    | Some("pipes") -> Pipes
-    | Some("csv") | None -> CSV (* default *)
-    | Some(x) -> raise(UnsupportedCollectionFormat x)
+  match Util.to_string json with
+    | "ssv" -> SSV
+    | "tsv" -> TSV
+    | "pipes" -> Pipes
+    | "csv" -> CSV (* default *)
+    | x -> raise(UnsupportedCollectionFormat x)
+
+let parameter_collection_format_from_json json : parameter_collection_format =
+  match Util.to_string json with
+    | "ssv" -> SSV
+    | "tsv" -> TSV
+    | "pipes" -> Pipes
+    | "multi" -> Multi
+    | "csv" -> CSV (* default *)
+    | x -> raise(UnsupportedCollectionFormat x)
+
+type parameter_collection_format = (* default is CSV *)
+  | CSV (* comma separated values *)
+  | SSV (* space separated values *)
+  | TSV (* tab separated values *)
+  | Pipes (* pipe separated values *)
+  | Multi (* multiple parametern instances, must be Query||FormData *)
 
 let rec item_from_json json =
-  let enum_values = match Util.member "enum" json with
-    | `List l -> Some(List.map to_string l)
-    | `Null -> None
-    | _ -> raise(UnsupportedEnumValues "enums must be an array")
-  in {
-    enum_values;
+  {
+    enum_values = member_opt_string_list "enum" json;
     datatype = member_map "type" data_type_from_json json;
     items = member_opt_map "items" item_from_json json;
     collection_format = member_opt_map "collectionFormat" collection_format_from_json json;
@@ -136,6 +156,32 @@ let rec data_schema_from_json json : data_schema =
     example = member_opt_string "example" json;
   }
 
+
+let parameter_from_json json : parameter =
+  {
+    name = member_string "name" json;
+    location = member_map "in" parameter_format_from_json json;
+    description = member_opt_string "description" json;
+    required = member_opt_map "required" Util.to_bool json;
+    schema = member_opt_map "schema" data_schema_from_json json;
+    data_type = member_opt_map "type" data_type_from_json json;
+    data_format = member_opt_map "formatt" data_format_from_json json;
+    allow_empty_value = member_opt_map "allowEmptyValue" Util.to_bool json;
+    items = member_opt_map "item" item_from_json json;
+    collection_format = member_opt_map "collectionFormat" parameter_collection_format_from_json json;
+    default = member_opt_map "default" default_value_from_json json;
+    enum_values = member_opt_string_list "enum" json;
+  }
+
+let header_from_json json : header =
+  {
+    description = member_opt_string "description" json;
+    data_type = member_map "type" data_type_from_json json;
+    data_format = member_opt_map "formatt" data_format_from_json json;
+    items = member_opt_map "item" item_from_json json;
+    collection_format = member_opt_map "collectionFormat" collection_format_from_json json;
+    default = member_opt_map "default" default_value_from_json json;
+  }
 
 
 let main () =
