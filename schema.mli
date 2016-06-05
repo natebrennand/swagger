@@ -191,19 +191,15 @@ type header = {
   *)
 }
 
-(* http://swagger.io/specification/#headersObject *)
-type headers = (string * header) list
-
-(* http://swagger.io/specification/#exampleObject *)
-(* mime-type -> value *)
-type example = (string * default_value) list
-
 (* http://swagger.io/specification/#responseObject *)
 type response = {
   description : string;
   schema : data_schema option;
-  headers : headers option;
-  examples : example option;
+  (* http://swagger.io/specification/#headersObject *)
+  headers : (string * header) list option;
+  (* http://swagger.io/specification/#exampleObject *)
+  (* mime-type -> value *)
+  examples : (string * default_value) list option;
 }
 
 type reference = {
@@ -239,7 +235,7 @@ type operation = {
   consumes : mime_types list option;
   produces : mime_types list option;
   parameters : parameters list;
-  responses : responses;
+  responses : (string * responses) list;
   schemes : transfer_protocol list option;
   deprecated : bool option;
   (* non-MVP options

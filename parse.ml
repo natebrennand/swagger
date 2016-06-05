@@ -173,7 +173,7 @@ let parameter_from_json json : parameter =
     enum_values = member_opt_string_list "enum" json;
   }
 
-let header_from_json json : header =
+let header_from_json json =
   {
     description = member_opt_string "description" json;
     data_type = member_map "type" data_type_from_json json;
@@ -183,6 +183,20 @@ let header_from_json json : header =
     default = member_opt_map "default" default_value_from_json json;
   }
 
+let response_from_json json =
+  {
+    description = member_string "description" json;
+    schema = member_opt_map "schema" data_schema_from_json json;
+    headers = member_opt_assoc "headers" header_from_json json;
+    examples = member_opt_assoc "examples" default_value_from_json json;
+  }
+
+let reference_from_json json = { ref = member_string "$ref" json; }
+
+let default_object_from_json json =
+  if Yojson.Basic.Util.member "$ref" json == `Null
+    then Ref(reference_from_json json)
+    else Resp(response_from_json json)
 
 let main () =
   let json = from_channel stdin in
